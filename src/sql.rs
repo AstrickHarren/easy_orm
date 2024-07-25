@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr, sync::Arc};
 
 use itertools::Itertools;
-use sqlx::{postgres::PgArguments, query::Query, Postgres, QueryBuilder};
+use sqlx::{postgres::PgArguments, query::Query, Encode, Postgres, QueryBuilder, Type};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct PlaceHolder {
@@ -51,6 +51,29 @@ impl Display for Col {
     }
 }
 
+pub(crate) trait IntoCol: Into<Col> {
+    fn eq<T>(self, val: T) -> ColEq<T> {
+        ColEq {
+            col: self.into(),
+            val,
+        }
+    }
+}
+impl<T: Into<Col>> IntoCol for T {}
+
+pub(crate) struct ColEq<T> {
+    col: Col,
+    val: T,
+}
+
+impl<'arg, T: Encode<'arg, Postgres> + Type<Postgres> + Clone + 'arg> Filter<'arg> for ColEq<T> {
+    fn filter(self, builder: &mut QueryBuilder<'arg, Postgres>) -> () {
+        builder.push(" ");
+        builder.push(format!("{} = ", self.col));
+        builder.push_bind(self.val);
+    }
+}
+
 pub(crate) struct Join {
     tbl: Iden,
     from_col: Iden,
@@ -67,20 +90,14 @@ impl Display for Join {
     }
 }
 
-pub trait Filter {
-    fn filter(&self, builder: &mut QueryBuilder<Postgres>);
+pub trait Filter<'q>: Sized {
+    fn filter(self, builder: &mut QueryBuilder<'q, Postgres>) {}
     fn effective(&self) -> bool {
         true
     }
 }
 
-impl Filter for () {
-    fn filter(&self, builder: &mut QueryBuilder<Postgres>) {}
-
-    fn effective(&self) -> bool {
-        false
-    }
-}
+impl<'a> Filter<'a> for () {}
 
 #[derive(Default)]
 pub(crate) struct Select<F = ()> {
@@ -97,10 +114,19 @@ impl Select {
             ..Default::default()
         }
     }
+
+    pub(crate) fn filter<F>(self, filter: F) -> Select<F> {
+        Select {
+            cols: self.cols,
+            from: self.from,
+            joins: self.joins,
+            filter,
+        }
+    }
 }
 
-impl<F: Filter> Select<F> {
-    pub(crate) fn query(self) -> QueryBuilder<'static, Postgres> {
+impl<'arg, F: Filter<'arg> + 'arg> Select<F> {
+    pub(crate) fn query(self) -> QueryBuilder<'arg, Postgres> {
         let mut builder = QueryBuilder::new(format!("{}", self));
         if self.filter.effective() {
             builder.push("WHERE ");

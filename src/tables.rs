@@ -29,7 +29,7 @@ pub(super) mod fruit {
     use sqlx::{Postgres, QueryBuilder};
 
     use super::*;
-    use crate::sql::Select;
+    use crate::sql::{IntoCol, Select};
 
     pub struct Entity;
 
@@ -38,10 +38,11 @@ pub(super) mod fruit {
             Select::new("fruit".into()).query()
         }
 
-        fn find_related<E>()
+        fn find_related<E>() -> QueryBuilder<'static, Postgres>
         where
             Self: Related<E>,
         {
+            Select::new("fruit".into()).query()
         }
     }
 
@@ -60,6 +61,7 @@ pub(super) mod fruit {
         Name,
         CakeId,
     }
+
     impl Into<Col> for Column {
         fn into(self) -> Col {
             match self {
