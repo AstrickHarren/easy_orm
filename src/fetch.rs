@@ -1,0 +1,3 @@
+struct Fetch {
+    sql: String,
+}
