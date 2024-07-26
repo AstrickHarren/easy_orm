@@ -1,24 +1,9 @@
-use std::{fmt::Display, str::FromStr, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
 use itertools::Itertools;
-use sqlx::{
-    postgres::{PgArguments, PgRow},
-    query::Query,
-    Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Type,
-};
+use sqlx::{postgres::PgRow, Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Type};
 
 use crate::relations::RelationDef;
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct PlaceHolder {
-    index: u32,
-}
-
-impl Display for PlaceHolder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "${}", self.index)
-    }
-}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Iden {
@@ -74,7 +59,7 @@ impl Display for Join {
 }
 
 pub trait Filter<'q>: Sized {
-    fn filter(self, builder: &mut QueryBuilder<'q, Postgres>) {}
+    fn filter(self, builder: &mut QueryBuilder<'q, Postgres>);
     fn effective(&self) -> bool {
         true
     }
@@ -106,6 +91,7 @@ where
 }
 
 impl Filter<'_> for () {
+    fn filter(self, _: &mut QueryBuilder<'_, Postgres>) {}
     fn effective(&self) -> bool {
         false
     }

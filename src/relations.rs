@@ -22,11 +22,11 @@ impl RelationBuilder {
     }
 }
 
-impl Into<RelationDef> for RelationBuilder {
-    fn into(self) -> RelationDef {
+impl From<RelationBuilder> for RelationDef {
+    fn from(val: RelationBuilder) -> Self {
         RelationDef {
-            from_col: self.from_col.unwrap(),
-            to_col: self.to_col.unwrap(),
+            from_col: val.from_col.unwrap(),
+            to_col: val.to_col.unwrap(),
         }
     }
 }

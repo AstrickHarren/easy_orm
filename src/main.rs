@@ -4,11 +4,7 @@ use easy_orm::{
     relations::{Related, RelationTrait},
     sql::IntoCol,
 };
-use sqlx::{
-    migrate::MigrateError,
-    postgres::{PgConnectOptions, PgPoolOptions},
-    PgPool,
-};
+use sqlx::{migrate::MigrateError, postgres::PgConnectOptions, PgPool};
 
 struct Db {
     pool: PgPool,
