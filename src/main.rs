@@ -31,6 +31,7 @@ impl Db {
 data_table!(Cake of cakes {
     [id: i32],
     name: String,
+    author: Option<String>,
 });
 
 data_table!(Fruits of fruits {
@@ -64,9 +65,6 @@ async fn main() {
     let db = Db::new().await.unwrap();
     db.migrate().await.unwrap();
 
-    let cakes: Vec<cake::Row> = Cake::find().all(&db.pool).await.unwrap();
-    dbg!(cakes);
-
     // find all cakes with fillings id 2
     let cakes: Vec<cake::Row> = Filling::find_related::<Cake>()
         .filter(filling::Column::Id.eq(3))
@@ -74,4 +72,27 @@ async fn main() {
         .await
         .unwrap();
     dbg!(cakes);
+
+    let fruits_of_chococake: Vec<fruits::Row> = Cake::find_related::<Fruits>()
+        .filter(cake::Column::Id.eq(2))
+        .all(&db.pool)
+        .await
+        .unwrap();
+    dbg!(fruits_of_chococake);
+
+    cake::Update::new(2)
+        .name("ChocolateCake")
+        .author("John".to_string())
+        .query()
+        .build()
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let cakes_with_grape: Vec<cake::Row> = Fruits::find_related::<Cake>()
+        .filter(fruits::Column::Id.eq(2))
+        .all(&db.pool)
+        .await
+        .unwrap();
+
+    dbg!(cakes_with_grape);
 }

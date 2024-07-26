@@ -127,7 +127,7 @@ impl Select {
         }
     }
 
-    pub(crate) fn col(mut self, col: impl IntoCol) -> Self {
+    pub fn col(mut self, col: impl IntoCol) -> Self {
         self.cols.push(col.into());
         self
     }

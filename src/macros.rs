@@ -18,6 +18,15 @@ macro_rules! data_table {
             use $crate::sql::{Col, Select};
             use sqlx::{ QueryBuilder, Postgres, PgExecutor, Error, FromRow };
 
+            macro_rules! idem_option {
+                (Option<$ty:ty>) => {
+                    Option<$ty>
+                };
+                ($ty:ty) => {
+                    Option<$ty>
+                }
+            }
+
             pub struct Entity;
 
             impl EntityTrait for Entity {
@@ -29,6 +38,51 @@ macro_rules! data_table {
             pub struct Row {
                 $(pub $id_col: $id_ty,)?
                 $(pub $col: $col_ty,)*
+            }
+
+            #[derive(Debug, Default)]
+            pub struct Update {
+                $($id_col: $id_ty,)?
+                $($col: idem_option!($col_ty),)*
+            }
+
+            impl Update {
+                $(
+                pub fn new($id_col: $id_ty) -> Self {
+                    Self::__new($id_col)
+                }
+                )?
+
+                fn __new($($id_col: $id_ty)?) -> Self {
+                    Self {
+                        $($id_col,)?
+                        $($col: None,)*
+                    }
+                }
+
+                $(
+                pub fn $col(mut self, val: impl Into<$col_ty>) -> Self
+                {
+                    let val: $col_ty = val.into();
+                    self.$col = val.into();
+                    self
+                }
+                )*
+
+                pub fn query(&self) -> QueryBuilder<Postgres> {
+                    let sql = format!("UPDATE {} SET ", Entity::TABLE_NAME);
+                    let mut builder = QueryBuilder::<Postgres>::new(sql);
+                    let mut sep = builder.separated(", ");
+                    $(
+                        sep.push(format!("{} = ", stringify!($col)));
+                        sep.push_bind_unseparated(&self.$col);
+                    )*
+                    $(
+                        builder.push(format!(" WHERE {} = ", stringify!($id_col)));
+                        builder.push_bind(self.$id_col);
+                    )?
+                    builder
+                }
             }
 
             #[derive(Debug, Default)]
@@ -113,6 +167,7 @@ data_table!(Person of people {
     [id: i32],
     name: String,
     addr: Option<String>,
+    age: Option<i32>,
 });
 
 data_table!(Circle of circles {
@@ -121,7 +176,6 @@ data_table!(Circle of circles {
 });
 
 data_table!(PersonCircle of person_circle {
-    [id: i32],
     person_id: i32 => Person.id,
     circle_id: i32 => Circle.id,
 });
@@ -152,5 +206,13 @@ mod tests {
             ..Default::default()
         };
         println!("{}", query.insert_query().into_sql());
+
+        let update = person::Update::new(1)
+            .name("Gil".to_string())
+            .addr("5000 Forbes".to_string())
+            .age(10)
+            .query()
+            .into_sql();
+        println!("{}", update);
     }
 }
