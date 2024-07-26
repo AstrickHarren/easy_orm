@@ -1,5 +1,7 @@
-mod common;
+pub mod common;
 mod fetch;
-mod relations;
-mod sql;
+#[macro_use]
+mod macros;
+pub mod relations;
+pub mod sql;
 mod tables;

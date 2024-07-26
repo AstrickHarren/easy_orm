@@ -223,6 +223,7 @@ name = "easy_orm"
 version = "0.1.0"
 dependencies = [
  "itertools",
+ "paste",
  "sqlx",
  "tokio",
 ]

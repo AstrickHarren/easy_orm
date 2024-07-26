@@ -1,9 +1,12 @@
 use crate::{
+    common::EntityTrait,
     relations::{Related, RelationBuilder, RelationDef, RelationTrait},
-    sql::Col,
+    sql::{Col, Select},
 };
+
 pub(super) mod cake {
     use super::*;
+    use crate::common::EntityTrait;
 
     pub struct Entity;
     pub struct Model {
@@ -23,26 +26,140 @@ pub(super) mod cake {
             }
         }
     }
+
+    impl Related<filling::Entity> for Entity {
+        fn to() -> RelationDef {
+            cake_filling::Relation::Cake.def().rev()
+        }
+
+        fn via() -> Option<RelationDef> {
+            cake_filling::Relation::Filling.def().into()
+        }
+    }
+
+    impl Related<fruit::Entity> for Entity {
+        fn to() -> RelationDef {
+            fruit::Relation::Cake.def().rev()
+        }
+    }
+
+    impl Entity {
+        pub fn find_related<E>() -> Select
+        where
+            Self: Related<E>,
+            E: EntityTrait,
+        {
+            let mut sql = Select::new(E::TABLE_NAME.into()).col(E::all_col());
+            if let Some(via) = Self::via() {
+                sql = sql.join(via)
+            }
+            sql.join(Self::to())
+        }
+    }
 }
-
-pub(super) mod fruit {
-    use sqlx::{Postgres, QueryBuilder};
-
+pub(super) mod filling {
     use super::*;
-    use crate::sql::{IntoCol, Select};
 
     pub struct Entity;
 
+    impl EntityTrait for Entity {
+        type Column = Column;
+
+        const TABLE_NAME: &'static str = "filling";
+    }
+    pub struct Model {
+        id: i32,
+        name: String,
+    }
+
+    pub enum Column {
+        Id,
+        Name,
+    }
+    impl Into<Col> for Column {
+        fn into(self) -> Col {
+            match self {
+                Column::Id => Col::new("filling".into(), "id".into()),
+                Column::Name => Col::new("filling".into(), "name".into()),
+            }
+        }
+    }
+}
+
+enum A {}
+impl A {
+    fn s(&self) -> () {
+        match self {
+            _ => (),
+        }
+    }
+}
+
+pub(super) mod cake_filling {
+    use super::*;
+
+    pub struct Entity;
+    pub enum Column {
+        CakeId,
+        FillingId,
+    }
+
+    impl Into<Col> for Column {
+        fn into(self) -> Col {
+            match self {
+                Column::CakeId => Col::new("cake_filling".into(), "cake_id".into()),
+                Column::FillingId => Col::new("cake_filling".into(), "filling_id".into()),
+            }
+        }
+    }
+
+    pub enum Relation {
+        Cake,
+        Filling,
+    }
+
+    impl RelationTrait for Relation {
+        fn def(&self) -> crate::relations::RelationDef {
+            match self {
+                Relation::Cake => RelationBuilder::new()
+                    .from(Column::CakeId)
+                    .to(cake::Column::Id)
+                    .into(),
+                Relation::Filling => RelationBuilder::new()
+                    .from(Column::FillingId)
+                    .to(filling::Column::Id)
+                    .into(),
+            }
+        }
+    }
+}
+
+pub(super) mod fruit {
+    use super::*;
+
+    pub struct Entity;
+
+    impl EntityTrait for Entity {
+        type Column = Column;
+
+        const TABLE_NAME: &'static str = "fruit";
+    }
+
     impl Entity {
-        fn find() -> QueryBuilder<'static, Postgres> {
-            Select::new("fruit".into()).query()
+        pub fn find() -> Select<()> {
+            Select::new("fruit".into())
         }
 
-        fn find_related<E>() -> QueryBuilder<'static, Postgres>
+        pub fn find_related<E>() -> Select<()>
         where
             Self: Related<E>,
         {
-            Select::new("fruit".into()).query()
+            let to = Self::to();
+            let tbl = to.to_col.tbl.clone();
+
+            Select::new(tbl.clone())
+                .col(Col::new(tbl, "*".into()))
+                .join(to)
         }
     }
 
@@ -61,7 +178,6 @@ pub(super) mod fruit {
         Name,
         CakeId,
     }
-
     impl Into<Col> for Column {
         fn into(self) -> Col {
             match self {
@@ -76,7 +192,7 @@ pub(super) mod fruit {
         fn def(&self) -> RelationDef {
             match self {
                 Relation::Cake => RelationBuilder::new()
-                    .from(Column::Id)
+                    .from(Column::CakeId)
                     .to(cake::Column::Id)
                     .into(),
             }
@@ -87,5 +203,21 @@ pub(super) mod fruit {
         fn to() -> RelationDef {
             Relation::Cake.def()
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{cake, fruit};
+    use crate::tables::{filling, A};
+
+    #[test]
+    fn test() {
+        let sql = cake::Entity::find_related::<fruit::Entity>();
+        let sql = sql.query().into_sql();
+        println!("{}", sql);
+
+        let sql = cake::Entity::find_related::<filling::Entity>();
+        println!("{}", sql.query().into_sql());
     }
 }

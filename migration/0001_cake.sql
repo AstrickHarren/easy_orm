@@ -23,4 +23,9 @@ CREATE TABLE cake_fillings (
     FOREIGN KEY (filling_id) REFERENCES fillings(id)
 );
 
+INSERT INTO cakes (name) VALUES ('CheeseCake'), ('ChocoCake');
+INSERT INTO fillings (name) VALUES ('Cheese'), ('Chocolate'), ('Flour');
+INSERT INTO cake_fillings (cake_id, filling_id) VALUES (1, 1), (2, 2), (1, 3), (2, 3);
+INSERT INTO fruits (name, cake_id) VALUES ('Pineapple', 1), ('Grape', 2);
+
 
