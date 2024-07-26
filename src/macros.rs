@@ -8,7 +8,7 @@ macro_rules! data_table {
     }) => {
         paste::paste!{
         #[allow(unused_imports)]
-        pub use [<$model:snake>]::{Entity as $model, [<Insert $model>]};
+        pub use [<$model:snake>]::{Entity as $model, Insert as [<Insert $model>], Update as [<Update $model>]};
         pub mod [<$model:snake>] {
             #![allow(unused_imports)]
             #![allow(dead_code)]
@@ -86,11 +86,11 @@ macro_rules! data_table {
             }
 
             #[derive(Debug, Default)]
-            pub struct [<Insert $model>] {
+            pub struct Insert {
                 $(pub $col: $col_ty,)*
             }
 
-            impl [<Insert $model:camel>] {
+            impl Insert {
                 pub fn insert_query(&self) -> QueryBuilder<Postgres> {
                     let cols = stringify!($($col),*);
                     let sql = format!("INSERT INTO {} ({}) VALUES (", Entity::TABLE_NAME, cols);
