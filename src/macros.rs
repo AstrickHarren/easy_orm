@@ -1,5 +1,3 @@
-use crate::relations::{Related, RelationTrait};
-
 #[macro_export]
 macro_rules! data_table {
     ($model:ident of $table_name:ident {
@@ -8,12 +6,16 @@ macro_rules! data_table {
     }) => {
         paste::paste!{
         #[allow(unused_imports)]
-        pub use [<$model:snake>]::{Entity as $model, Insert as [<Insert $model>], Update as [<Update $model>]};
+        pub use [<$model:snake>]::{
+            Entity as $model,
+            Insert as [<Insert $model>],
+            Update as [<Update $model>]
+        };
         pub mod [<$model:snake>] {
             #![allow(unused_imports)]
             #![allow(dead_code)]
             use super::*;
-            use $crate::common::EntityTrait;
+            use $crate::common::{EntityTrait, ColumnList};
             use $crate::relations::{ RelationTrait, RelationDef, RelationBuilder, Related };
             use $crate::sql::{Col, Select};
             use sqlx::{ QueryBuilder, Postgres, PgExecutor, Error, FromRow };
@@ -30,8 +32,19 @@ macro_rules! data_table {
             pub struct Entity;
 
             impl EntityTrait for Entity {
+                type Row = Row;
                 type Column = Column;
                 const TABLE_NAME: &'static str = stringify!($table_name);
+            }
+
+            impl ColumnList for Entity {
+                type Data = Row;
+                fn cols() -> impl Iterator<Item = Col> {
+                    std::iter::once(Col {
+                        tbl: Self::TABLE_NAME.into(),
+                        col: "*".into()
+                    })
+                }
             }
 
             #[derive(Debug, FromRow)]
@@ -90,6 +103,14 @@ macro_rules! data_table {
                 $(pub $col: $col_ty,)*
             }
 
+            macro_rules! cond {
+                ($body:tt; then $then:tt; else $else:tt ) => { $then };
+                (then; else $else:tt) => { $else }
+            }
+
+            // IdTy is `$id_ty` if `$id_col` is present, otherwise '()'
+            type IdTy = cond!( $($id_col;)? then $($id_ty)?; else ());
+
             impl Insert {
                 pub fn insert_query(&self) -> QueryBuilder<Postgres> {
                     let cols = stringify!($($col),*);
@@ -101,10 +122,10 @@ macro_rules! data_table {
                     builder
                 }
 
-                pub async fn insert<'c, E: PgExecutor<'c>>(&self, e: E) -> Result<(), Error>{
+                pub async fn insert<'c, E: PgExecutor<'c>>(&self, e: E) -> Result<IdTy, Error>{
                     let mut query = self.insert_query();
-                    query.build().execute(e).await?;
-                    Ok(())
+                    $(query.push(format!(" RETURNING {}", stringify!($id_col)));)?
+                    query.build_query_scalar().fetch_one(e).await
                 }
             }
 
@@ -163,38 +184,52 @@ macro_rules! data_table {
     };
 }
 
-data_table!(Person of people {
-    [id: i32],
-    name: String,
-    addr: Option<String>,
-    age: Option<i32>,
-});
+#[macro_export]
+macro_rules! many_to_many {
+    ($from:ident -> $via:ident -> $to:ident) => {
+        paste::paste! {
+        impl $crate::relations::Related<$to::Entity> for $from::Entity {
+            fn to() -> $crate::relations::RelationDef {
+                use $crate::relations::RelationTrait;
+                $via::Relation::[<$to:camel>].def()
+            }
 
-data_table!(Circle of circles {
-    [id: i32],
-    name: String,
-});
-
-data_table!(PersonCircle of person_circle {
-    person_id: i32 => Person.id,
-    circle_id: i32 => Circle.id,
-});
-
-impl Related<Circle> for Person {
-    fn to() -> crate::relations::RelationDef {
-        person_circle::Relation::Circle.def()
-    }
-
-    fn via() -> Option<crate::relations::RelationDef> {
-        person_circle::Relation::Person.def().rev().into()
-    }
+            fn via() -> Option<$crate::relations::RelationDef> {
+                use $crate::relations::RelationTrait;
+                $via::Relation::[<$from:camel>].def().rev().into()
+            }
+        }
+        }
+    };
+    ($from:ident - $via:ident - $to:ident) => {
+        many_to_many!($from -> $via -> $to);
+        many_to_many!($to -> $via -> $from);
+    };
 }
 
 #[cfg(test)]
 mod tests {
     use crate::common::EntityTrait;
 
-    use super::*;
+    data_table!(Person of people {
+        [id: i32],
+        name: String,
+        addr: Option<String>,
+        age: Option<i32>,
+    });
+
+    data_table!(Circle of circles {
+        [id: i32],
+        name: String,
+    });
+
+    data_table!(PersonCircle of person_circle {
+        person_id: i32 => Person.id,
+        circle_id: i32 => Circle.id,
+    });
+
+    many_to_many!(person - person_circle - circle);
+
     #[test]
     fn test() {
         println!("{}", Person::find_related::<PersonCircle>().query().sql());

@@ -1,9 +1,9 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
 use itertools::Itertools;
 use sqlx::{postgres::PgRow, Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Type};
 
-use crate::relations::RelationDef;
+use crate::{common::ColumnList, relations::RelationDef};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Iden {
@@ -65,6 +65,7 @@ pub trait Filter<'q>: Sized {
     }
 }
 
+#[deprecated]
 pub trait IntoCol: Into<Col> {
     fn eq<T>(self, val: T) -> ColEq<T> {
         ColEq {
@@ -98,24 +99,22 @@ impl Filter<'_> for () {
 }
 
 #[derive(Default)]
-pub struct Select<F = ()> {
-    cols: Vec<Col>,
+pub struct Select<C, F = ()> {
     from: Iden,
     joins: Vec<Join>,
     filter: F,
+
+    _pha: PhantomData<C>,
 }
 
-impl Select {
+impl<C> Select<C> {
     pub(crate) fn new(name: Iden) -> Self {
         Self {
             from: name,
-            ..Default::default()
+            joins: Default::default(),
+            filter: (),
+            _pha: PhantomData,
         }
-    }
-
-    pub fn col(mut self, col: impl IntoCol) -> Self {
-        self.cols.push(col.into());
-        self
     }
 
     pub fn join(mut self, rel: RelationDef) -> Self {
@@ -128,17 +127,17 @@ impl Select {
         self
     }
 
-    pub fn filter<F>(self, f: F) -> Select<F> {
+    pub fn filter<F>(self, f: F) -> Select<C, F> {
         Select {
-            cols: self.cols,
             from: self.from,
             joins: self.joins,
             filter: f,
+            _pha: self._pha,
         }
     }
 }
 
-impl<'q, F: Filter<'q>> Select<F> {
+impl<'q, C: ColumnList, F: Filter<'q>> Select<C, F> {
     pub fn query(self) -> QueryBuilder<'q, Postgres> {
         let mut builder = QueryBuilder::new(format!("{}", self));
         if self.filter.effective() {
@@ -148,22 +147,31 @@ impl<'q, F: Filter<'q>> Select<F> {
         builder
     }
 
-    pub async fn all<'c, T, E>(self, e: E) -> Result<Vec<T>, sqlx::Error>
+    pub async fn one<'c, E>(self, e: E) -> Result<C::Data, sqlx::Error>
     where
         E: PgExecutor<'c>,
-        for<'r> T: FromRow<'r, PgRow> + Send + Unpin,
+        for<'r> C::Data: FromRow<'r, PgRow> + Send + Unpin,
+    {
+        let mut query = self.query();
+        query.build_query_as().fetch_one(e).await
+    }
+
+    pub async fn all<'c, E>(self, e: E) -> Result<Vec<C::Data>, sqlx::Error>
+    where
+        E: PgExecutor<'c>,
+        for<'r> C::Data: FromRow<'r, PgRow> + Send + Unpin,
     {
         let mut query = self.query();
         query.build_query_as().fetch_all(e).await
     }
 }
 
-impl<F> Display for Select<F> {
+impl<C, F> Display for Select<C, F>
+where
+    C: ColumnList,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let cols = match self.cols.is_empty() {
-            true => "*".to_string(),
-            false => self.cols.iter().join(", "),
-        };
+        let cols = C::cols().join(", ");
         writeln!(f, "SELECT {} FROM {}", cols, self.from)?;
         for join in self.joins.iter().rev() {
             writeln!(f, "{}", join)?;
