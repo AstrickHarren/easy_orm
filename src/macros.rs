@@ -38,7 +38,8 @@ macro_rules! data_table {
             }
 
             impl ColumnList for Entity {
-                type Data = Row;
+                type Extractor = Row;
+                type Extracted = Row;
                 fn cols() -> impl Iterator<Item = Col> {
                     std::iter::once(Col {
                         tbl: Self::TABLE_NAME.into(),
@@ -145,6 +146,10 @@ macro_rules! data_table {
                         ,)*
                     }
                 }
+            }
+
+            mod cols {
+                use super::*;
             }
 
             pub enum Relation {

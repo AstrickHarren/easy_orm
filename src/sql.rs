@@ -1,5 +1,6 @@
 use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
+use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use sqlx::{postgres::PgRow, Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Type};
 
@@ -147,22 +148,29 @@ impl<'q, C: ColumnList, F: Filter<'q>> Select<C, F> {
         builder
     }
 
-    pub async fn one<'c, E>(self, e: E) -> Result<C::Data, sqlx::Error>
+    pub async fn one<'c, E>(self, e: E) -> Result<C::Extracted, sqlx::Error>
     where
         E: PgExecutor<'c>,
-        for<'r> C::Data: FromRow<'r, PgRow> + Send + Unpin,
+        for<'r> C::Extractor: Send + Unpin,
     {
         let mut query = self.query();
-        query.build_query_as().fetch_one(e).await
+        let extractor: C::Extractor = query.build_query_as().fetch_one(e).await?;
+        Ok(extractor.into())
     }
 
-    pub async fn all<'c, E>(self, e: E) -> Result<Vec<C::Data>, sqlx::Error>
+    pub async fn all<'c, E>(self, e: E) -> Result<Vec<C::Extracted>, sqlx::Error>
     where
         E: PgExecutor<'c>,
-        for<'r> C::Data: FromRow<'r, PgRow> + Send + Unpin,
+        for<'r> C::Extractor: Send + Unpin,
     {
         let mut query = self.query();
-        query.build_query_as().fetch_all(e).await
+
+        query
+            .build_query_as::<C::Extractor>()
+            .fetch(e)
+            .map(|x| x.map(|x| x.into()))
+            .try_collect()
+            .await
     }
 }
 

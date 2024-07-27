@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use sqlx::{postgres::PgRow, FromRow, Postgres};
+use sqlx::{postgres::PgRow, FromRow, Postgres, Row};
 
 use crate::{
     relations::Related,
@@ -52,6 +52,7 @@ pub trait ColumnTrait {
 }
 
 pub trait ColumnList {
-    type Data: for<'r> FromRow<'r, PgRow>;
+    type Extractor: for<'r> FromRow<'r, PgRow>;
+    type Extracted: From<Self::Extractor>;
     fn cols() -> impl Iterator<Item = Col>;
 }

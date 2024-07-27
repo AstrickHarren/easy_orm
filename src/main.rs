@@ -118,5 +118,13 @@ async fn main() {
         .await
         .unwrap();
 
-    dbg!(rnd, rnd_people);
+    let itai = InsertPerson {
+        first_name: "Itai".to_string(),
+        ..Default::default()
+    }
+    .insert(&db.pool)
+    .await
+    .unwrap();
+
+    dbg!(rnd, rnd_people, itai);
 }
