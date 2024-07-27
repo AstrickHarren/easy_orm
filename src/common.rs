@@ -9,7 +9,6 @@ use crate::{
 
 pub trait EntityTrait {
     const TABLE_NAME: &'static str;
-    type Column;
     type Row;
 
     fn all_col() -> Col {
@@ -36,18 +35,23 @@ pub trait EntityTrait {
     }
 }
 
-pub trait ColumnTrait {
-    const TABLE_NAME: &'static str;
-    const COL_NAME: &'static str;
+pub trait Selector {
+    type Data;
+    fn cols() -> impl Iterator<Item = Col>;
+    fn from_row(row: &PgRow) -> Result<Self::Data, sqlx::Error>;
+}
 
-    type Data: for<'r> FromRow<'r, PgRow>;
-
-    // TODO: stop copying (using Cow?)
-    fn col() -> Col {
-        Col {
-            tbl: Self::TABLE_NAME.into(),
-            col: Self::COL_NAME.into(),
-        }
+impl<A, B> Selector for (A, B)
+where
+    A: Selector,
+    B: Selector,
+{
+    type Data = (A::Data, B::Data);
+    fn cols() -> impl Iterator<Item = Col> {
+        A::cols().chain(B::cols())
+    }
+    fn from_row(row: &PgRow) -> Result<Self::Data, sqlx::Error> {
+        Ok((A::from_row(row)?, B::from_row(row)?))
     }
 }
 

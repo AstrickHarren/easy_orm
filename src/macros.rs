@@ -7,18 +7,25 @@ macro_rules! def_cols {
             pub struct [<$c:camel Extractor>] {
                 $c: $c_ty,
             }
-            impl From<[<$c:camel Extractor>]> for $c_ty {
-                fn from(val: [<$c:camel Extractor>]) -> $c_ty {
-                    val.$c
+
+            impl Into<Col> for [<$c:camel>] {
+                fn into(self) -> Col {
+                    Col::new(
+                        Entity::TABLE_NAME.into(), stringify!($c).into()
+                    )
                 }
             }
-            impl ColumnList for [<$c:camel>] {
-                type Extractor = [<$c:camel Extractor>];
-                type Extracted = $c_ty;
+
+            impl $crate::common::Selector for [<$c:camel>] {
+                type Data = $c_ty;
                 fn cols() -> impl Iterator<Item = Col> {
                     std::iter::once(Col::new(
                         Entity::TABLE_NAME.into(), stringify!($c).into()
                     ))
+                }
+                fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self::Data, sqlx::Error> {
+                    use sqlx::Row;
+                    row.try_get(stringify!($c))
                 }
             }
         }
@@ -60,19 +67,7 @@ macro_rules! data_table {
 
             impl EntityTrait for Entity {
                 type Row = Row;
-                type Column = Column;
                 const TABLE_NAME: &'static str = stringify!($table_name);
-            }
-
-            impl ColumnList for Entity {
-                type Extractor = Row;
-                type Extracted = Row;
-                fn cols() -> impl Iterator<Item = Col> {
-                    std::iter::once(Col {
-                        tbl: Self::TABLE_NAME.into(),
-                        col: "*".into()
-                    })
-                }
             }
 
             #[derive(Debug, FromRow)]
@@ -157,23 +152,6 @@ macro_rules! data_table {
                 }
             }
 
-            pub enum Column {
-                $( [<$id_col:camel>],)?
-                $( [<$col:camel>],)*
-            }
-
-            impl Into<Col> for Column {
-                fn into(self) -> Col {
-                    match self {
-                        $(Column::[<$id_col:camel>] => Col::new(
-                            Entity::TABLE_NAME.into(), stringify!($id_col).into())
-                        ,)?
-                        $(Column::[<$col:camel>] => Col::new(
-                            Entity::TABLE_NAME.into(), stringify!($col).into())
-                        ,)*
-                    }
-                }
-            }
 
             pub mod cols {
                 use super::*;
@@ -184,6 +162,18 @@ macro_rules! data_table {
                 impl Entity {
                     $(pub const [<$id_col:camel>]: [<$id_col:camel>] = [<$id_col:camel>];)?
                     $(pub const [<$col:camel>]: [<$col:camel>] = [<$col:camel>];)*
+                }
+
+                impl $crate::common::Selector for Entity {
+                    type Data = Row;
+                    fn cols() -> impl Iterator<Item = Col> {
+                        std::iter::once(Col::new(
+                            Self::TABLE_NAME.into(), "*".into()
+                        ))
+                    }
+                    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self::Data, sqlx::Error> {
+                        Row::from_row(row)
+                    }
                 }
             }
 
@@ -197,8 +187,8 @@ macro_rules! data_table {
                     match self {
                         $($(
                         Relation::[<$ref:camel>] => RelationBuilder::new()
-                            .from(Column::[<$col:camel>])
-                            .to([<$ref:snake>]::Column::[<$ref_col:camel>])
+                            .from(Entity::[<$col:camel>])
+                            .to([<$ref:snake>]::Entity::[<$ref_col:camel>])
                             .into(),
                         )?)*
                         Relation::Nothing => unreachable!()

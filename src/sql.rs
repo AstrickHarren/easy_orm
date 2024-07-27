@@ -2,9 +2,12 @@ use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
 use futures::{Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
-use sqlx::{postgres::PgRow, Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Type};
+use sqlx::{postgres::PgRow, Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Row, Type};
 
-use crate::{common::ColumnList, relations::RelationDef};
+use crate::{
+    common::{ColumnList, Selector},
+    relations::RelationDef,
+};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Iden {
@@ -66,7 +69,6 @@ pub trait Filter<'q>: Sized {
     }
 }
 
-#[deprecated]
 pub trait IntoCol: Into<Col> {
     fn eq<T>(self, val: T) -> ColEq<T> {
         ColEq {
@@ -138,7 +140,7 @@ impl<C> Select<C> {
     }
 }
 
-impl<'q, C: ColumnList, F: Filter<'q>> Select<C, F> {
+impl<'q, C: Selector, F: Filter<'q>> Select<C, F> {
     pub fn col<D>(self, _: D) -> Select<D, F> {
         Select {
             from: self.from,
@@ -157,27 +159,27 @@ impl<'q, C: ColumnList, F: Filter<'q>> Select<C, F> {
         builder
     }
 
-    pub async fn one<'c, E>(self, e: E) -> Result<C::Extracted, sqlx::Error>
+    pub async fn one<'c, E>(self, e: E) -> Result<C::Data, sqlx::Error>
     where
         E: PgExecutor<'c>,
-        for<'r> C::Extractor: Send + Unpin,
+        C: Selector,
     {
         let mut query = self.query();
-        let extractor: C::Extractor = query.build_query_as().fetch_one(e).await?;
-        Ok(extractor.into())
+        let row = query.build().fetch_one(e).await?;
+        C::from_row(&row)
     }
 
-    pub async fn all<'c, E>(self, e: E) -> Result<Vec<C::Extracted>, sqlx::Error>
+    pub async fn all<'c, E>(self, e: E) -> Result<Vec<C::Data>, sqlx::Error>
     where
         E: PgExecutor<'c>,
-        for<'r> C::Extractor: Send + Unpin,
+        C: Selector,
     {
         let mut query = self.query();
 
         query
-            .build_query_as::<C::Extractor>()
+            .build()
             .fetch(e)
-            .map(|x| x.map(|x| x.into()))
+            .map(|x| x.and_then(|x| C::from_row(&x)))
             .try_collect()
             .await
     }
@@ -185,7 +187,7 @@ impl<'q, C: ColumnList, F: Filter<'q>> Select<C, F> {
 
 impl<C, F> Display for Select<C, F>
 where
-    C: ColumnList,
+    C: Selector,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cols = C::cols().join(", ");
