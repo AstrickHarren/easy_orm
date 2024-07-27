@@ -108,8 +108,8 @@ async fn main() {
     let db = Db::new().await.unwrap();
     db.migrate().await.unwrap();
 
-    let (rnd_id, rnd_name) = Circle::find()
-        .col((Circle::Id, Circle::Name))
+    let (rnd_id, rnd_name, rnd) = Circle::find()
+        .col((Circle::Id, Circle::Name, Circle))
         .filter(Circle::Name.eq("RND"))
         .one(&db.pool)
         .await
@@ -129,5 +129,5 @@ async fn main() {
     .await
     .unwrap();
 
-    dbg!(rnd_id, rnd_name, rnd_people, itai);
+    dbg!(rnd_id, rnd_name, rnd, rnd_people, itai);
 }
