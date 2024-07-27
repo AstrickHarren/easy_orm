@@ -139,6 +139,15 @@ impl<C> Select<C> {
 }
 
 impl<'q, C: ColumnList, F: Filter<'q>> Select<C, F> {
+    pub fn col<D>(self, _: D) -> Select<D, F> {
+        Select {
+            from: self.from,
+            joins: self.joins,
+            filter: self.filter,
+            _pha: PhantomData,
+        }
+    }
+
     pub fn query(self) -> QueryBuilder<'q, Postgres> {
         let mut builder = QueryBuilder::new(format!("{}", self));
         if self.filter.effective() {

@@ -1,3 +1,5 @@
+use std::i64;
+
 use easy_orm::{
     common::EntityTrait,
     data_table, many_to_many,
@@ -106,14 +108,22 @@ async fn main() {
     let db = Db::new().await.unwrap();
     db.migrate().await.unwrap();
 
-    let rnd = Circle::find()
+    let rnd_id = Circle::find()
+        .col(Circle::Id)
+        .filter(circle::Column::Name.eq("RND"))
+        .one(&db.pool)
+        .await
+        .unwrap();
+
+    let rnd_name = Circle::find()
+        .col(Circle::Name)
         .filter(circle::Column::Name.eq("RND"))
         .one(&db.pool)
         .await
         .unwrap();
 
     let rnd_people = Circle::find_related::<Person>()
-        .filter(circle::Column::Id.eq(rnd.id))
+        .filter(circle::Column::Id.eq(rnd_id))
         .all(&db.pool)
         .await
         .unwrap();
@@ -126,5 +136,5 @@ async fn main() {
     .await
     .unwrap();
 
-    dbg!(rnd, rnd_people, itai);
+    dbg!(rnd_id, rnd_name, rnd_people, itai);
 }

@@ -1,4 +1,31 @@
 #[macro_export]
+macro_rules! def_cols {
+    ($c:ident : $c_ty: ty) => {
+        paste::paste! {
+            pub struct [<$c:camel>];
+            #[derive(FromRow)]
+            pub struct [<$c:camel Extractor>] {
+                $c: $c_ty,
+            }
+            impl From<[<$c:camel Extractor>]> for $c_ty {
+                fn from(val: [<$c:camel Extractor>]) -> $c_ty {
+                    val.$c
+                }
+            }
+            impl ColumnList for [<$c:camel>] {
+                type Extractor = [<$c:camel Extractor>];
+                type Extracted = $c_ty;
+                fn cols() -> impl Iterator<Item = Col> {
+                    std::iter::once(Col::new(
+                        Entity::TABLE_NAME.into(), stringify!($c).into()
+                    ))
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! data_table {
     ($model:ident of $table_name:ident {
         $([$id_col:ident: $id_ty:ty],)?
@@ -148,8 +175,16 @@ macro_rules! data_table {
                 }
             }
 
-            mod cols {
+            pub mod cols {
                 use super::*;
+                $($crate::def_cols!($id_col: $id_ty);)?
+                $($crate::def_cols!($col: $col_ty);)*
+
+                #[allow(non_upper_case_globals)]
+                impl Entity {
+                    $(pub const [<$id_col:camel>]: [<$id_col:camel>] = [<$id_col:camel>];)?
+                    $(pub const [<$col:camel>]: [<$col:camel>] = [<$col:camel>];)*
+                }
             }
 
             pub enum Relation {
