@@ -4,7 +4,7 @@ use sqlx::{postgres::PgRow, FromRow, Postgres, Row};
 
 use crate::{
     relations::Related,
-    sql::{Col, Iden, Select},
+    sql::{Col, Iden, JoinTy, Select},
 };
 
 pub trait EntityTrait {
@@ -29,9 +29,9 @@ pub trait EntityTrait {
     {
         let mut sql = Select::new(E::TABLE_NAME.into());
         if let Some(via) = Self::via() {
-            sql = sql.join(via)
+            sql = sql.join(JoinTy::Left, via)
         }
-        sql.join(Self::to())
+        sql.join(JoinTy::Left, Self::to())
     }
 }
 
@@ -39,6 +39,16 @@ pub trait Selector {
     type Data;
     fn cols() -> impl Iterator<Item = Col>;
     fn from_row(row: &PgRow) -> Result<Self::Data, sqlx::Error>;
+}
+
+impl Selector for () {
+    type Data = ();
+    fn cols() -> impl Iterator<Item = Col> {
+        std::iter::empty()
+    }
+    fn from_row(_: &PgRow) -> Result<Self::Data, sqlx::Error> {
+        Ok(())
+    }
 }
 
 // implementing `Selector` for tuples

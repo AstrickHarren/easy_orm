@@ -46,7 +46,23 @@ impl Display for Col {
     }
 }
 
+#[derive(Default, Debug)]
+pub enum JoinTy {
+    #[default]
+    Inner,
+    Outer,
+    Left,
+    Right,
+}
+
+impl Display for JoinTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("{:?}", self).to_uppercase())
+    }
+}
+
 pub(crate) struct Join {
+    ty: JoinTy,
     tbl: Iden,
     from_col: Col,
     to_col: Col,
@@ -56,8 +72,8 @@ impl Display for Join {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "JOIN {} ON {} = {}",
-            self.tbl, self.from_col, self.to_col
+            "{} JOIN {} ON {} = {}",
+            self.ty, self.tbl, self.from_col, self.to_col
         )
     }
 }
@@ -76,6 +92,13 @@ pub trait IntoCol: Into<Col> {
             val,
         }
     }
+
+    fn is_null(self, val: bool) -> ColNull {
+        ColNull {
+            col: self.into(),
+            is_null: val,
+        }
+    }
 }
 impl<T: Into<Col>> IntoCol for T {}
 
@@ -91,6 +114,18 @@ where
     fn filter(self, builder: &mut QueryBuilder<'arg, Postgres>) {
         builder.push(format!(" {} = ", self.col));
         builder.push_bind(self.val);
+    }
+}
+
+pub struct ColNull {
+    col: Col,
+    is_null: bool,
+}
+
+impl<'arg> Filter<'arg> for ColNull {
+    fn filter(self, builder: &mut QueryBuilder<'arg, Postgres>) {
+        let null = if self.is_null { "NULL" } else { "NOT NULL" };
+        builder.push(format!(" {} IS {}", self.col, null));
     }
 }
 
@@ -120,8 +155,9 @@ impl<C> Select<C> {
         }
     }
 
-    pub fn join(mut self, rel: RelationDef) -> Self {
+    pub fn join(mut self, ty: JoinTy, rel: RelationDef) -> Self {
         let join = Join {
+            ty,
             tbl: rel.from_col.tbl.clone(),
             from_col: rel.from_col,
             to_col: rel.to_col,

@@ -103,6 +103,11 @@ many_to_many!(person - people_in_circle - circle);
 many_to_many!(service - services_in_circle - circle);
 many_to_many!(cake - cake_filling - filling);
 
+// is_in_circle
+// join_circle
+// uncircled_people
+//
+
 #[tokio::main]
 async fn main() {
     let db = Db::new().await.unwrap();
@@ -115,11 +120,41 @@ async fn main() {
         .await
         .unwrap();
 
+    let exist_marketing = Circle::find()
+        .col(())
+        .filter(Circle::Name.eq("Marketing"))
+        .query()
+        .build()
+        .fetch_optional(&db.pool)
+        .await
+        .unwrap();
+
+    let exist_rnd = Circle::find()
+        .col(())
+        .filter(Circle::Name.eq("RND"))
+        .query()
+        .build()
+        .fetch_optional(&db.pool)
+        .await
+        .unwrap();
+
     let rnd_people = Circle::find_related::<Person>()
         .filter(Circle::Id.eq(rnd_id))
         .all(&db.pool)
         .await
         .unwrap();
+
+    let uncircled_people = Circle::find_related::<Person>()
+        .filter(Circle::Id.is_null(true))
+        .all(&db.pool)
+        .await
+        .unwrap();
+
+    let uncircled_people_query = Circle::find_related::<Person>()
+        .filter(Circle::Id.is_null(true))
+        .query()
+        .into_sql();
+    println!("{}", uncircled_people_query);
 
     let itai = InsertPerson {
         first_name: "Itai".to_string(),
@@ -129,5 +164,14 @@ async fn main() {
     .await
     .unwrap();
 
-    dbg!(rnd_id, rnd_name, rnd, rnd_people, itai);
+    dbg!(
+        rnd_id,
+        rnd_name,
+        rnd,
+        rnd_people,
+        uncircled_people,
+        itai,
+        exist_marketing,
+        exist_rnd
+    );
 }
