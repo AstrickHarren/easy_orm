@@ -1,10 +1,9 @@
-use std::{marker::PhantomData, sync::Arc};
 
-use sqlx::{postgres::PgRow, FromRow, Postgres, Row};
+use sqlx::{postgres::PgRow, FromRow};
 
 use crate::{
     relations::Related,
-    sql::{Col, Iden, JoinTy, Select},
+    sql::{Col, JoinTy, Select},
 };
 
 pub trait EntityTrait {

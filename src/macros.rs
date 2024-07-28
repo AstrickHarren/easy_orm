@@ -8,8 +8,8 @@ macro_rules! def_cols {
                 $c: $c_ty,
             }
 
-            impl Into<Col> for [<$c:camel>] {
-                fn into(self) -> Col {
+            impl From<[<$c:camel>]> for Col {
+                fn from(val: [<$c:camel>]) -> Self {
                     Col::new(
                         Entity::TABLE_NAME.into(), stringify!($c).into()
                     )

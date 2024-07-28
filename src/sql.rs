@@ -1,8 +1,8 @@
 use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
-use sqlx::{postgres::PgRow, Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Row, Type};
+use sqlx::{Encode, FromRow, PgExecutor, Postgres, QueryBuilder, Type};
 
 use crate::{
     common::{ColumnList, Selector},

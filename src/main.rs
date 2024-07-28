@@ -3,7 +3,7 @@ use std::i64;
 use easy_orm::{
     common::EntityTrait,
     data_table, many_to_many,
-    relations::{Related, RelationTrait},
+    relations::RelationTrait,
     sql::IntoCol,
 };
 use sqlx::{migrate::MigrateError, postgres::PgConnectOptions, PgPool};
